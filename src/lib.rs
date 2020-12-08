@@ -40,17 +40,24 @@ impl Command {
         Command { id, command }
     }
 
-    // TODO: Improve this please, this is so slow
     pub fn from_string(s: &str) -> Result<Command, Box<dyn Error>> {
-        let re = Regex::new(r": (\d*):(\d*);([\s\S]*)").unwrap();
-        let captures: Vec<regex::Captures> = re.captures_iter(s).collect();
-        if captures.len() != 1 {
-            return Err(Errors::ParseCommandError.into());
-        }
-        let capture = captures.get(0).ok_or(Errors::ParseCommandError)?;
+        // Regex version is so slow
+        // let re = Regex::new(r": (\d*):(\d*);([\s\S]*)").unwrap();
+        // let captures: Vec<regex::Captures> = re.captures_iter(s).collect();
+        // if captures.len() != 1 {
+        //     return Err(Errors::ParseCommandError.into());
+        // }
+        // let capture = captures.get(0).ok_or(Errors::ParseCommandError)?;
+        // Ok(Command::new(
+        //     *(&capture[1].parse::<u32>()?),
+        //     String::from(&capture[3]),
+        // ))
+        let str = String::from(s);
+        let id = str.get(2..12).ok_or(Errors::ParseCommandError)?;
+        let cmd = str.get(15..).ok_or(Errors::ParseCommandError)?;
         Ok(Command::new(
-            *(&capture[1].parse::<u32>()?),
-            String::from(&capture[3]),
+            id.parse::<u32>()?,
+            String::from(cmd),
         ))
     }
 }
