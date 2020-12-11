@@ -1,7 +1,7 @@
-use std::{error::Error, fs::File};
 use std::fmt;
 use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
+use std::{error::Error, fs::File};
 
 #[derive(Debug, Clone)]
 enum Errors {
@@ -21,7 +21,7 @@ impl fmt::Display for Errors {
 
 impl Error for Errors {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Command {
     id: u32,
     command: String,
@@ -48,6 +48,24 @@ impl Command {
         let id = str.get(2..12).ok_or(Errors::ParseCommandError)?;
         let cmd = str.get(15..).ok_or(Errors::ParseCommandError)?;
         Ok(Command::new(id.parse::<u32>()?, String::from(cmd)))
+    }
+
+    pub fn get_match_score(&self, s: &String) -> i32 {
+        let mut query = s.chars();
+        let mut cmd = self.command.chars().into_iter();
+        while let Some(lhs) = query.next() {
+            let mut found = false;
+            while let Some(rhs) = cmd.next() {
+                if lhs == rhs {
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                return 0;
+            }
+        }
+        return 1;
     }
 }
 
@@ -111,5 +129,14 @@ impl Finder {
 
     pub fn update_query(&mut self, new_query: String) {
         self.query = new_query
+    }
+
+    pub fn get_matched_commands(&self) -> Vec<&Command> {
+        let result: Vec<&Command> = self
+            .commands
+            .iter()
+            .filter(|cmd| cmd.get_match_score(&self.query) > 0)
+            .collect();
+        result
     }
 }
