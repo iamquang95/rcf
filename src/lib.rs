@@ -3,6 +3,13 @@ use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
 use std::{error::Error, fs::File};
 
+use std::io::Write;
+use termion::cursor;
+use termion::event::Key;
+use termion::input::TermRead;
+use termion::raw::IntoRawMode;
+use termion::screen::*;
+
 #[derive(Debug, Clone)]
 enum Errors {
     ParseCommandError = 1,
@@ -138,5 +145,55 @@ impl Finder {
             .filter(|cmd| cmd.get_match_score(&self.query) > 0)
             .collect();
         result
+    }
+
+    // Terminal UI
+
+    const NUM_SUGGESTIONS: usize = 5;
+
+    pub fn render(&mut self) -> Result<(), Box<dyn Error>> {
+        let stdin = std::io::stdin();
+        let mut stdout = std::io::stdout().into_raw_mode()?;
+
+        write!(stdout, "{}", cursor::Save)?;
+
+        let blank_lines: String = (0..Finder::NUM_SUGGESTIONS)
+            .map(|idx| format!("{} \r\n", idx))
+            .collect();
+
+        write!(stdout, "{}", blank_lines)?;
+        stdout.flush()?;
+
+        for c in stdin.keys() {
+            write!(stdout, "{}{}", cursor::Restore, cursor::Save)?;
+            write!(stdout, "{}\r\n", self.query)?;
+            let mut matches = self.get_matched_commands();
+            matches.reverse();
+            let (matches, _) = matches.split_at(Finder::NUM_SUGGESTIONS);
+            for c in matches {
+                write!(stdout, "{:?}\r\n", c)?;
+            }
+            stdout.flush()?;
+
+            match c.unwrap() {
+                Key::Ctrl('c') => break,
+                Key::Char(ch) => {
+                    let new_query = format!("{}{}", self.query, ch);
+                    self.update_query(new_query)
+                }
+                Key::Backspace => {
+                    let new_query = match self.query.get(..self.query.len() - 1) {
+                        Some(q) => String::from(q),
+                        None => String::from(""),
+                    };
+                    self.update_query(new_query)
+                }
+                // Key::Up => println!("↑"),
+                // Key::Down => println!("↓"),
+                _ => {}
+            }
+        }
+
+        Ok(())
     }
 }
