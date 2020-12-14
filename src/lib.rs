@@ -8,7 +8,6 @@ use termion::cursor;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
-use termion::screen::*;
 
 #[derive(Debug, Clone)]
 enum Errors {
@@ -73,6 +72,20 @@ impl Command {
             }
         }
         return 1;
+    }
+
+    pub fn truncate_command(&self, max_len: u16) -> String {
+        let cmd: String = self
+            .command
+            .chars()
+            .filter_map(|c| match c {
+                '\r' => None,
+                '\n' => Some(' '),
+                _ => Some(c),
+            })
+            .collect();
+        let size = std::cmp::min(cmd.len(), usize::from(max_len));
+        cmd.chars().take(size).collect()
     }
 }
 
@@ -152,29 +165,24 @@ impl Finder {
     const NUM_SUGGESTIONS: usize = 5;
 
     pub fn render(&mut self) -> Result<(), Box<dyn Error>> {
+        let (n_term_cols, _) = termion::terminal_size()?;
+
         let stdin = std::io::stdin();
         let mut stdout = std::io::stdout().into_raw_mode()?;
 
-        write!(stdout, "{}", cursor::Save)?;
-
-        let blank_lines: String = (0..Finder::NUM_SUGGESTIONS)
-            .map(|idx| format!("{} \r\n", idx))
+        let blank_lines: String = (0..=Finder::NUM_SUGGESTIONS)
+            .map(|_| format!("\n",))
             .collect();
 
-        write!(stdout, "{}", blank_lines)?;
+        let move_cursor_up: String = (0..=Finder::NUM_SUGGESTIONS)
+            .map(|_| format!("{}", cursor::Up(1)))
+            .collect();
+
+        write!(stdout, "{}{}{}", blank_lines, move_cursor_up, cursor::Save)?;
+
         stdout.flush()?;
 
         for c in stdin.keys() {
-            write!(stdout, "{}{}", cursor::Restore, cursor::Save)?;
-            write!(stdout, "{}\r\n", self.query)?;
-            let mut matches = self.get_matched_commands();
-            matches.reverse();
-            let (matches, _) = matches.split_at(Finder::NUM_SUGGESTIONS);
-            for c in matches {
-                write!(stdout, "{:?}\r\n", c)?;
-            }
-            stdout.flush()?;
-
             match c.unwrap() {
                 Key::Ctrl('c') => break,
                 Key::Char(ch) => {
@@ -182,9 +190,13 @@ impl Finder {
                     self.update_query(new_query)
                 }
                 Key::Backspace => {
-                    let new_query = match self.query.get(..self.query.len() - 1) {
-                        Some(q) => String::from(q),
-                        None => String::from(""),
+                    let new_query = if self.query.len() > 0 {
+                        match self.query.get(..self.query.len() - 1) {
+                            Some(q) => String::from(q),
+                            None => String::from(""),
+                        }
+                    } else {
+                        String::from("")
                     };
                     self.update_query(new_query)
                 }
@@ -192,6 +204,23 @@ impl Finder {
                 // Key::Down => println!("↓"),
                 _ => {}
             }
+
+            write!(stdout, "{}{}", cursor::Restore, cursor::Save)?;
+            write!(stdout, "{}\r\n", self.query)?;
+
+            let mut matches = self.get_matched_commands();
+            matches.reverse();
+
+            let truncated_matches = if matches.len() > Finder::NUM_SUGGESTIONS {
+                let (left, _) = matches.split_at(Finder::NUM_SUGGESTIONS);
+                left.to_vec()
+            } else {
+                matches
+            };
+            for c in truncated_matches {
+                write!(stdout, "{}\r\n", c.truncate_command(n_term_cols - 5))?;
+            }
+            stdout.flush()?;
         }
 
         Ok(())
