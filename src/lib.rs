@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use std::{error::Error, fs::File};
 
 use std::io::Write;
-use termion::cursor;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
+use termion::{color::White, cursor};
 
 #[derive(Debug, Clone)]
 enum Errors {
@@ -182,6 +182,8 @@ impl Finder {
 
         stdout.flush()?;
 
+        let mut selecting_cmd = 0usize;
+
         for c in stdin.keys() {
             match c.unwrap() {
                 Key::Ctrl('c') => break,
@@ -200,8 +202,16 @@ impl Finder {
                     };
                     self.update_query(new_query)
                 }
-                // Key::Up => println!("↑"),
-                // Key::Down => println!("↓"),
+                Key::Up => {
+                    selecting_cmd = if selecting_cmd > 0 {
+                        selecting_cmd - 1
+                    } else {
+                        selecting_cmd
+                    }
+                }
+                Key::Down => {
+                    selecting_cmd = std::cmp::min(selecting_cmd + 1, Finder::NUM_SUGGESTIONS - 1)
+                }
                 _ => {}
             }
 
@@ -217,7 +227,22 @@ impl Finder {
             } else {
                 matches
             };
-            for c in truncated_matches {
+            for (idx, c) in truncated_matches.into_iter().enumerate() {
+                if idx == selecting_cmd {
+                    write!(
+                        stdout,
+                        "{}{}",
+                        termion::color::Bg(termion::color::White),
+                        termion::color::Fg(termion::color::Black)
+                    )?;
+                } else {
+                    write!(
+                        stdout,
+                        "{}{}",
+                        termion::color::Bg(termion::color::Black),
+                        termion::color::Fg(termion::color::White)
+                    )?;
+                };
                 write!(stdout, "{}\r\n", c.truncate_command(n_term_cols - 5))?;
             }
             stdout.flush()?;
