@@ -112,7 +112,6 @@ impl Finder {
         let lines: Vec<String> = buf_reader.lines().filter_map(|line| line.ok()).collect();
         let mut commands_str: Vec<String> = vec![];
         let mut cur_command = String::from("");
-        println!("{:?}", std::time::SystemTime::now());
         lines.iter().for_each(|line| {
             let first_char = line.chars().nth(0).unwrap_or('?');
             if first_char == ':' {
@@ -125,7 +124,6 @@ impl Finder {
         if !cur_command.is_empty() {
             commands_str.push(cur_command);
         }
-        println!("{:?}", std::time::SystemTime::now());
         let commands: Vec<Command> = commands_str
             .iter()
             .filter_map(|cmd_str| match Command::from_string(cmd_str) {
@@ -133,8 +131,6 @@ impl Finder {
                 Err(_) => None,
             })
             .collect();
-        println!("{:?}", std::time::SystemTime::now());
-        println!("{}", commands.len());
         Ok(Finder::new_without_query(commands))
     }
 
@@ -144,7 +140,6 @@ impl Finder {
         } else {
             Some(PathBuf::from("/Users/iamquang95/.zhistory"))
         };
-        println!("{:?}", res);
         res
     }
 
