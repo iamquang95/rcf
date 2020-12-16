@@ -1,14 +1,14 @@
-use std::fmt;
 use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
 use std::{error::Error, fs::File};
+use std::{fmt, io::Stdout};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
 use std::io::Write;
-use termion::event::Key;
+use termion::cursor;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
-use termion::{color::White, cursor};
+use termion::{event::Key, raw::RawTerminal};
 
 #[derive(Debug, Clone)]
 enum Errors {
@@ -166,23 +166,12 @@ impl Finder {
     const NUM_SUGGESTIONS: usize = 5;
 
     pub fn render(&mut self) -> Result<(), Box<dyn Error>> {
-        let (n_term_cols, _) = termion::terminal_size()?;
-
         let stdin = std::io::stdin();
         let mut stdout = std::io::stdout().into_raw_mode()?;
 
-        let blank_lines: String = (0..=Finder::NUM_SUGGESTIONS)
-            .map(|_| format!("\n",))
-            .collect();
-
-        let move_cursor_up: String = (0..=Finder::NUM_SUGGESTIONS)
-            .map(|_| format!("{}", cursor::Up(1)))
-            .collect();
-
+        let blank_lines: String = (0..=Finder::NUM_SUGGESTIONS).map(|_| "\n").collect();
+        let move_cursor_up = format!("{}", cursor::Up((Finder::NUM_SUGGESTIONS + 1) as u16));
         write!(stdout, "{}{}{}", blank_lines, move_cursor_up, cursor::Save)?;
-
-        let mut clipboard_ctx: ClipboardContext = ClipboardProvider::new()?;
-
         stdout.flush()?;
 
         let mut selecting_cmd = 0usize;
@@ -191,20 +180,7 @@ impl Finder {
             match c.unwrap() {
                 Key::Ctrl('c') => break,
                 Key::Char('\n') => {
-                    let mut matches = self.get_matched_commands();
-                    matches.reverse();
-
-                    let truncated_matches = if matches.len() > Finder::NUM_SUGGESTIONS {
-                        let (left, _) = matches.split_at(Finder::NUM_SUGGESTIONS);
-                        left.to_vec()
-                    } else {
-                        matches
-                    };
-                    let cmd = truncated_matches.get(selecting_cmd).map(|cmd| {
-                        cmd.command.clone()
-                    }).unwrap_or(String::from(""));
-                    clipboard_ctx
-                        .set_contents(cmd)?;
+                    self.copy_command_to_clipboard(selecting_cmd)?;
                     break;
                 }
                 Key::Char(ch) => {
@@ -213,21 +189,14 @@ impl Finder {
                 }
                 Key::Backspace => {
                     let new_query = if self.query.len() > 0 {
-                        match self.query.get(..self.query.len() - 1) {
-                            Some(q) => String::from(q),
-                            None => String::from(""),
-                        }
+                        self.query.chars().take(self.query.len() - 1).collect()
                     } else {
                         String::from("")
                     };
                     self.update_query(new_query)
                 }
                 Key::Up => {
-                    selecting_cmd = if selecting_cmd > 0 {
-                        selecting_cmd - 1
-                    } else {
-                        selecting_cmd
-                    }
+                    selecting_cmd = selecting_cmd.checked_sub(1).unwrap_or(0);
                 }
                 Key::Down => {
                     selecting_cmd = std::cmp::min(selecting_cmd + 1, Finder::NUM_SUGGESTIONS - 1)
@@ -235,39 +204,64 @@ impl Finder {
                 _ => {}
             }
 
-            write!(stdout, "{}{}", cursor::Restore, cursor::Save)?;
+            write!(stdout, "{}{}{}", cursor::Restore, cursor::Save, termion::clear::AfterCursor)?;
             write!(stdout, "{}\r\n", self.query)?;
 
-            let mut matches = self.get_matched_commands();
-            matches.reverse();
-
-            let truncated_matches = if matches.len() > Finder::NUM_SUGGESTIONS {
-                let (left, _) = matches.split_at(Finder::NUM_SUGGESTIONS);
-                left.to_vec()
-            } else {
-                matches
-            };
-            for (idx, c) in truncated_matches.into_iter().enumerate() {
-                if idx == selecting_cmd {
-                    write!(
-                        stdout,
-                        "{}{}",
-                        termion::color::Bg(termion::color::White),
-                        termion::color::Fg(termion::color::Black)
-                    )?;
-                } else {
-                    write!(
-                        stdout,
-                        "{}{}",
-                        termion::color::Bg(termion::color::Black),
-                        termion::color::Fg(termion::color::White)
-                    )?;
-                };
-                write!(stdout, "{}\r\n", c.truncate_command(n_term_cols - 5))?;
-            }
-            stdout.flush()?;
+            let truncated_matches = self.get_truncated_matches();
+            Finder::output_matched_commands(truncated_matches, selecting_cmd, &mut stdout)?;
         }
 
+        Ok(())
+    }
+
+    fn get_truncated_matches(&self) -> Vec<&Command> {
+        let mut matches = self.get_matched_commands();
+        matches.reverse();
+
+        if matches.len() > Finder::NUM_SUGGESTIONS {
+            let (left, _) = matches.split_at(Finder::NUM_SUGGESTIONS);
+            left.to_vec()
+        } else {
+            matches
+        }
+    }
+
+    fn copy_command_to_clipboard(&self, selecting_cmd: usize) -> Result<(), Box<dyn Error>> {
+        let mut clipboard_ctx: ClipboardContext = ClipboardProvider::new()?;
+        let truncated_matches = self.get_truncated_matches();
+        let cmd = truncated_matches
+            .get(selecting_cmd)
+            .map(|cmd| cmd.command.clone())
+            .unwrap_or(String::from(""));
+        clipboard_ctx.set_contents(cmd)?;
+        Ok(())
+    }
+
+    fn output_matched_commands(
+        matches: Vec<&Command>,
+        selecting_cmd: usize,
+        stdout: &mut RawTerminal<Stdout>,
+    ) -> Result<(), Box<dyn Error>> {
+        let (n_term_cols, _) = termion::terminal_size()?;
+        for (idx, c) in matches.into_iter().enumerate() {
+            if idx == selecting_cmd {
+                write!(
+                    stdout,
+                    "{}{}",
+                    termion::color::Bg(termion::color::White),
+                    termion::color::Fg(termion::color::Black)
+                )?;
+            } else {
+                write!(
+                    stdout,
+                    "{}{}",
+                    termion::color::Bg(termion::color::Black),
+                    termion::color::Fg(termion::color::White)
+                )?;
+            };
+            write!(stdout, "{}\r\n", c.truncate_command(n_term_cols - 5))?;
+        }
+        stdout.flush()?;
         Ok(())
     }
 }
