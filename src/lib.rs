@@ -3,6 +3,7 @@ use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
 use std::{error::Error, fs::File};
 
+use clipboard::{ClipboardContext, ClipboardProvider};
 use std::io::Write;
 use termion::event::Key;
 use termion::input::TermRead;
@@ -180,6 +181,8 @@ impl Finder {
 
         write!(stdout, "{}{}{}", blank_lines, move_cursor_up, cursor::Save)?;
 
+        let mut clipboard_ctx: ClipboardContext = ClipboardProvider::new()?;
+
         stdout.flush()?;
 
         let mut selecting_cmd = 0usize;
@@ -187,6 +190,23 @@ impl Finder {
         for c in stdin.keys() {
             match c.unwrap() {
                 Key::Ctrl('c') => break,
+                Key::Char('\n') => {
+                    let mut matches = self.get_matched_commands();
+                    matches.reverse();
+
+                    let truncated_matches = if matches.len() > Finder::NUM_SUGGESTIONS {
+                        let (left, _) = matches.split_at(Finder::NUM_SUGGESTIONS);
+                        left.to_vec()
+                    } else {
+                        matches
+                    };
+                    let cmd = truncated_matches.get(selecting_cmd).map(|cmd| {
+                        cmd.command.clone()
+                    }).unwrap_or(String::from(""));
+                    clipboard_ctx
+                        .set_contents(cmd)?;
+                    break;
+                }
                 Key::Char(ch) => {
                     let new_query = format!("{}{}", self.query, ch);
                     self.update_query(new_query)
