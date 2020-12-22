@@ -35,6 +35,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuzzy-matcher"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54614a3312934d066701a80f20f15fa3b56d67ac7722b39eea5b4c9dd1d66c94"
+dependencies = [
+ "thread_local",
+]
+
+[[package]]
+name = "lazy_static"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+
+[[package]]
 name = "libc"
 version = "0.2.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -113,6 +128,7 @@ name = "rf"
 version = "0.1.0"
 dependencies = [
  "clipboard",
+ "fuzzy-matcher",
  "termion",
 ]
 
@@ -126,6 +142,15 @@ dependencies = [
  "numtoa",
  "redox_syscall",
  "redox_termios",
+]
+
+[[package]]
+name = "thread_local"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d40c6d1b69745a6ec6fb1ca717914848da4b44ae29d9b3080cbee91d72a69b14"
+dependencies = [
+ "lazy_static",
 ]
 
 [[package]]

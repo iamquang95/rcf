@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 termion = "*"
 clipboard = "0.5.0"
+fuzzy-matcher = "*"

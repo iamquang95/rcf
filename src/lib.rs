@@ -10,6 +10,9 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::{event::Key, raw::RawTerminal};
 
+use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
+
 #[derive(Debug, Clone)]
 enum Errors {
     ParseCommandError = 1,
@@ -57,22 +60,29 @@ impl Command {
         Ok(Command::new(id.parse::<u32>()?, String::from(cmd)))
     }
 
-    pub fn get_match_score(&self, s: &String) -> i32 {
-        let mut query = s.chars();
-        let mut cmd = self.command.chars().into_iter();
-        while let Some(lhs) = query.next() {
-            let mut found = false;
-            while let Some(rhs) = cmd.next() {
-                if lhs == rhs {
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                return 0;
-            }
-        }
-        return 1;
+    pub fn get_match_score(&self, s: &String) -> i64 {
+        let matcher = SkimMatcherV2::default();
+        let score = matcher
+            .fuzzy_indices(&self.command, s)
+            .map(|(score, _)| score)
+            .unwrap_or(-1508);
+        return score;
+
+        // let mut query = s.chars();
+        // let mut cmd = self.command.chars().into_iter();
+        // while let Some(lhs) = query.next() {
+        //     let mut found = false;
+        //     while let Some(rhs) = cmd.next() {
+        //         if lhs == rhs {
+        //             found = true;
+        //             break;
+        //         }
+        //     }
+        //     if !found {
+        //         return 0;
+        //     }
+        // }
+        // return 1;
     }
 
     pub fn truncate_command(&self, max_len: u16) -> String {
@@ -148,11 +158,12 @@ impl Finder {
     }
 
     pub fn get_matched_commands(&self) -> Vec<&Command> {
-        let result: Vec<&Command> = self
+        let mut result: Vec<&Command> = self
             .commands
             .iter()
             .filter(|cmd| cmd.get_match_score(&self.query) > 0)
             .collect();
+        result.reverse();
         result
     }
 
@@ -199,7 +210,13 @@ impl Finder {
                 _ => {}
             }
 
-            write!(stdout, "{}{}{}", cursor::Restore, cursor::Save, termion::clear::AfterCursor)?;
+            write!(
+                stdout,
+                "{}{}{}",
+                cursor::Restore,
+                cursor::Save,
+                termion::clear::AfterCursor
+            )?;
             write!(stdout, "{}\r\n", self.query)?;
 
             let truncated_matches = self.get_truncated_matches();
@@ -210,8 +227,7 @@ impl Finder {
     }
 
     fn get_truncated_matches(&self) -> Vec<&Command> {
-        let mut matches = self.get_matched_commands();
-        matches.reverse();
+        let matches = self.get_matched_commands();
 
         if matches.len() > Finder::NUM_SUGGESTIONS {
             let (left, _) = matches.split_at(Finder::NUM_SUGGESTIONS);
