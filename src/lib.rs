@@ -157,11 +157,10 @@ impl Finder {
         self.query = new_query
     }
 
-    pub fn get_matched_commands(&self) -> Vec<&Command> {
-        let mut result: Vec<&Command> = self
-            .commands
+    pub fn get_matched_commands<'a, 'b>(commands: &'a Vec<Command>, query: &'b String) -> Vec<&'a Command> {
+        let mut result: Vec<&Command> = commands
             .iter()
-            .filter(|cmd| cmd.get_match_score(&self.query) > 0)
+            .filter(|cmd| cmd.get_match_score(&query) > 0)
             .collect();
         result.reverse();
         result
@@ -179,18 +178,23 @@ impl Finder {
         let move_cursor_up = format!("{}", cursor::Up((Finder::NUM_SUGGESTIONS + 1) as u16));
         write!(stdout, "{}{}{}", blank_lines, move_cursor_up, cursor::Save)?;
         stdout.flush()?;
+        // TODO: well, clone isn't good...
+        let commands = self.commands.clone();
 
         let mut selecting_cmd = 0usize;
+
+        let mut truncated_matches = Finder::get_truncated_matches(&commands, &self.query);
 
         for c in stdin.keys() {
             match c.unwrap() {
                 Key::Ctrl('c') => break,
                 Key::Char('\n') => {
-                    self.copy_command_to_clipboard(selecting_cmd)?;
+                    Finder::copy_command_to_clipboard(&truncated_matches, selecting_cmd)?;
                     break;
                 }
                 Key::Char(ch) => {
                     let new_query = format!("{}{}", self.query, ch);
+                    truncated_matches = Finder::get_truncated_matches(&commands, &new_query);
                     self.update_query(new_query)
                 }
                 Key::Backspace => {
@@ -199,6 +203,7 @@ impl Finder {
                     } else {
                         String::from("")
                     };
+                    truncated_matches = Finder::get_truncated_matches(&commands, &new_query);
                     self.update_query(new_query)
                 }
                 Key::Up => {
@@ -219,15 +224,14 @@ impl Finder {
             )?;
             write!(stdout, "{}\r\n", self.query)?;
 
-            let truncated_matches = self.get_truncated_matches();
-            Finder::output_matched_commands(truncated_matches, selecting_cmd, &mut stdout)?;
+            Finder::output_matched_commands(&truncated_matches, selecting_cmd, &mut stdout)?;
         }
 
         Ok(())
     }
 
-    fn get_truncated_matches(&self) -> Vec<&Command> {
-        let matches = self.get_matched_commands();
+    fn get_truncated_matches<'a, 'b>(commands: &'a Vec<Command>, query: &'b String) -> Vec<&'a Command> {
+        let matches = Finder::get_matched_commands(commands, query);
 
         if matches.len() > Finder::NUM_SUGGESTIONS {
             let (left, _) = matches.split_at(Finder::NUM_SUGGESTIONS);
@@ -237,10 +241,9 @@ impl Finder {
         }
     }
 
-    fn copy_command_to_clipboard(&self, selecting_cmd: usize) -> Result<(), Box<dyn Error>> {
+    fn copy_command_to_clipboard(commands: &Vec<&Command>, selecting_cmd: usize) -> Result<(), Box<dyn Error>> {
         let mut clipboard_ctx: ClipboardContext = ClipboardProvider::new()?;
-        let truncated_matches = self.get_truncated_matches();
-        let cmd = truncated_matches
+        let cmd = commands 
             .get(selecting_cmd)
             .map(|cmd| cmd.command.clone())
             .unwrap_or(String::from(""));
@@ -249,7 +252,7 @@ impl Finder {
     }
 
     fn output_matched_commands(
-        matches: Vec<&Command>,
+        matches: &Vec<&Command>,
         selecting_cmd: usize,
         stdout: &mut RawTerminal<Stdout>,
     ) -> Result<(), Box<dyn Error>> {
