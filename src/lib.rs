@@ -158,12 +158,14 @@ impl Finder {
     }
 
     pub fn get_matched_commands<'a, 'b>(commands: &'a Vec<Command>, query: &'b String) -> Vec<&'a Command> {
-        let mut result: Vec<&Command> = commands
+        let mut result: Vec<(&Command, i64)> = commands
             .iter()
-            .filter(|cmd| cmd.get_match_score(&query) > 0)
+            .map(|cmd| (cmd, cmd.get_match_score(&query)))
             .collect();
+        result.sort_by_key(|k| k.1);
         result.reverse();
-        result
+        let ranked_result: Vec<&Command> = result.iter().map(|k| k.0).collect();
+        ranked_result
     }
 
     // Terminal UI
