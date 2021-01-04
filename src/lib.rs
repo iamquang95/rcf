@@ -1,9 +1,7 @@
+use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
 use std::{error::Error, fs::File};
 use std::{fmt, io::Stdout};
-use std::{
-    io::{prelude::*, BufReader},
-};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
 use crossbeam::thread;
@@ -19,14 +17,12 @@ use fuzzy_matcher::FuzzyMatcher;
 #[derive(Debug, Clone)]
 enum Errors {
     ParseCommandError = 1,
-    CreateFinderError = 2,
 }
 
 impl fmt::Display for Errors {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let error_text = match self {
             Errors::ParseCommandError => "fail to parse command",
-            Errors::CreateFinderError => "fail to create finder",
         };
         write!(f, "{}", error_text)
     }
@@ -119,39 +115,63 @@ impl Finder {
     }
 
     pub fn new_with_bash_history() -> Result<Finder, Box<dyn Error>> {
-        let path = Finder::get_history_file_path().ok_or(Errors::CreateFinderError)?;
-        let f = File::open(&path)?;
-        let buf_reader = BufReader::new(f);
-        let lines: Vec<String> = buf_reader.lines().filter_map(|line| line.ok()).collect();
-        let mut commands_str: Vec<String> = vec![];
-        let mut cur_command = String::from("");
-        lines.iter().for_each(|line| {
-            let first_char = line.chars().nth(0).unwrap_or('?');
-            if first_char == ':' {
-                commands_str.push(cur_command.clone());
-                cur_command = String::from(line);
-            } else {
-                cur_command.push_str(&format!("{}\r\n", line));
-            };
-        });
-        if !cur_command.is_empty() {
-            commands_str.push(cur_command);
+        let paths = Finder::get_history_file_path();
+        let mut all_commands: Vec<Command> = vec![];
+        for path in paths {
+            let f_res = File::open(&path);
+            if f_res.is_err() {
+                continue;
+            }
+            let f = f_res?;
+            let buf_reader = BufReader::new(f);
+            let lines: Vec<String> = buf_reader.lines().filter_map(|line| line.ok()).collect();
+            let mut commands_str: Vec<String> = vec![];
+            let mut cur_command = String::from("");
+            lines.iter().for_each(|line| {
+                let first_char = line.chars().nth(0).unwrap_or('?');
+                if first_char == ':' {
+                    commands_str.push(cur_command.clone());
+                    cur_command = String::from(line);
+                } else {
+                    cur_command.push_str(&format!("{}\r\n", line));
+                };
+            });
+            if !cur_command.is_empty() {
+                commands_str.push(cur_command);
+            }
+            let mut commands: Vec<Command> = commands_str
+                .iter()
+                .filter_map(|cmd_str| match Command::from_string(cmd_str) {
+                    Ok(cmd) => Some(cmd),
+                    Err(_) => None,
+                })
+                .collect();
+            all_commands.append(&mut commands);
         }
-        let commands: Vec<Command> = commands_str
-            .iter()
-            .filter_map(|cmd_str| match Command::from_string(cmd_str) {
-                Ok(cmd) => Some(cmd),
-                Err(_) => None,
-            })
-            .collect();
-        Ok(Finder::new_without_query(commands))
+        Ok(Finder::new_without_query(all_commands))
     }
 
-    fn get_history_file_path() -> Option<PathBuf> {
+    fn get_history_file_path() -> Vec<PathBuf> {
         let res = if let Ok(hist_file) = std::env::var("HISTFILE") {
-            Some(PathBuf::from(hist_file))
+            vec![PathBuf::from(hist_file)]
         } else {
-            Some(PathBuf::from("/Users/iamquang95/.zhistory"))
+            if let Ok(shell_path) = std::env::var("SHELL") {
+                if shell_path.contains("zsh") {
+                    if let Ok(home_path) = std::env::var("HOME") {
+                        vec![
+                            PathBuf::from(format!("{}/.zhistory", home_path)),
+                            PathBuf::from(format!("{}/.zsh_history", home_path)),
+                        ]
+                    } else {
+                        vec![]
+                    }
+                } else {
+                    // Only supported zsh
+                    vec![]
+                }
+            } else {
+                vec![]
+            }
         };
         res
     }
