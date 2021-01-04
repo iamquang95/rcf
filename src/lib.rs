@@ -1,9 +1,12 @@
-use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
 use std::{error::Error, fs::File};
 use std::{fmt, io::Stdout};
+use std::{
+    io::{prelude::*, BufReader},
+};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
+use crossbeam::thread;
 use std::io::Write;
 use termion::cursor;
 use termion::input::TermRead;
@@ -157,11 +160,39 @@ impl Finder {
         self.query = new_query
     }
 
-    pub fn get_matched_commands<'a, 'b>(commands: &'a Vec<Command>, query: &'b String) -> Vec<&'a Command> {
-        let mut result: Vec<(&Command, i64)> = commands
-            .iter()
-            .map(|cmd| (cmd, cmd.get_match_score(&query)))
-            .collect();
+    pub fn get_matched_commands<'a, 'b>(
+        commands: &'a Vec<Command>,
+        query: &'b String,
+    ) -> Vec<&'a Command> {
+        fn get_score<'a>(commands: &'a [Command], query: &String) -> Vec<(&'a Command, i64)> {
+            let result: Vec<(&Command, i64)> = commands
+                .iter()
+                .map(|cmd| (cmd, cmd.get_match_score(&query)))
+                .collect();
+            result
+        }
+
+        const NTHREAD: usize = 8;
+        let job_chunks = commands.chunks(commands.len() / NTHREAD);
+        let mut result = thread::scope(|s| {
+            let mut handles = vec![];
+            for chunk in job_chunks {
+                handles.push(s.spawn(move |_| get_score(chunk, query)));
+            }
+            let mut result = vec![];
+            for handle in handles {
+                let mut chunk_result = handle.join().unwrap();
+                result.append(&mut chunk_result);
+            }
+            result
+        })
+        .unwrap();
+
+        // let mut result: Vec<(&Command, i64)> = commands
+        //     .iter()
+        //     .map(|cmd| (cmd, cmd.get_match_score(&query)))
+        //     .collect();
+
         result.sort_by_key(|k| k.1);
         result.reverse();
         let ranked_result: Vec<&Command> = result.iter().map(|k| k.0).collect();
@@ -232,7 +263,10 @@ impl Finder {
         Ok(())
     }
 
-    fn get_truncated_matches<'a, 'b>(commands: &'a Vec<Command>, query: &'b String) -> Vec<&'a Command> {
+    fn get_truncated_matches<'a, 'b>(
+        commands: &'a Vec<Command>,
+        query: &'b String,
+    ) -> Vec<&'a Command> {
         let matches = Finder::get_matched_commands(commands, query);
 
         if matches.len() > Finder::NUM_SUGGESTIONS {
@@ -243,9 +277,12 @@ impl Finder {
         }
     }
 
-    fn copy_command_to_clipboard(commands: &Vec<&Command>, selecting_cmd: usize) -> Result<(), Box<dyn Error>> {
+    fn copy_command_to_clipboard(
+        commands: &Vec<&Command>,
+        selecting_cmd: usize,
+    ) -> Result<(), Box<dyn Error>> {
         let mut clipboard_ctx: ClipboardContext = ClipboardProvider::new()?;
-        let cmd = commands 
+        let cmd = commands
             .get(selecting_cmd)
             .map(|cmd| cmd.command.clone())
             .unwrap_or(String::from(""));
