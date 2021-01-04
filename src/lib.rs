@@ -14,6 +14,8 @@ use termion::{event::Key, raw::RawTerminal};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 
+use itertools::Itertools;
+
 #[derive(Debug, Clone)]
 enum Errors {
     ParseCommandError = 1,
@@ -56,7 +58,7 @@ impl Command {
         let str = String::from(s);
         let id = str.get(2..12).ok_or(Errors::ParseCommandError)?;
         let cmd = str.get(15..).ok_or(Errors::ParseCommandError)?;
-        Ok(Command::new(id.parse::<u32>()?, String::from(cmd)))
+        Ok(Command::new(id.parse::<u32>()?, String::from(cmd.trim())))
     }
 
     pub fn get_match_score(&self, s: &String) -> i64 {
@@ -215,13 +217,14 @@ impl Finder {
 
         result.sort_by_key(|k| k.1);
         result.reverse();
-        let ranked_result: Vec<&Command> = result.iter().map(|k| k.0).collect();
+        // result.dedup_by_key(|k| &k.0.command);
+        let ranked_result: Vec<&Command> = result.into_iter().map(|k| k.0).unique_by(|cmd| &cmd.command).collect();
         ranked_result
     }
 
     // Terminal UI
 
-    const NUM_SUGGESTIONS: usize = 5;
+    const NUM_SUGGESTIONS: usize = 15;
 
     pub fn render(&mut self) -> Result<(), Box<dyn Error>> {
         let stdin = std::io::stdin();
