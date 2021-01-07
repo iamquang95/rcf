@@ -218,7 +218,11 @@ impl Finder {
         result.sort_by_key(|k| k.1);
         result.reverse();
         // result.dedup_by_key(|k| &k.0.command);
-        let ranked_result: Vec<&Command> = result.into_iter().map(|k| k.0).unique_by(|cmd| &cmd.command).collect();
+        let ranked_result: Vec<&Command> = result
+            .into_iter()
+            .map(|k| k.0)
+            .unique_by(|cmd| &cmd.command)
+            .collect();
         ranked_result
     }
 
@@ -227,7 +231,6 @@ impl Finder {
     const NUM_SUGGESTIONS: usize = 15;
 
     pub fn render(&mut self) -> Result<(), Box<dyn Error>> {
-        let stdin = std::io::stdin();
         let mut stdout = std::io::stdout().into_raw_mode()?;
 
         let blank_lines: String = (0..=Finder::NUM_SUGGESTIONS).map(|_| "\n").collect();
@@ -241,46 +244,55 @@ impl Finder {
 
         let mut truncated_matches = Finder::get_truncated_matches(&commands, &self.query);
 
-        for c in stdin.keys() {
-            match c.unwrap() {
-                Key::Ctrl('c') => break,
-                Key::Char('\n') => {
-                    Finder::copy_command_to_clipboard(&truncated_matches, selecting_cmd)?;
-                    break;
+        let mut stdin = termion::async_stdin().keys();
+        loop {
+            let key = stdin.next();
+            if let Some(Ok(c)) = key {
+                match c {
+                    Key::Ctrl('c') => {
+                        println!("ctrl c");
+                        break;
+                    }
+                    Key::Char('\n') => {
+                        println!("enter");
+                        Finder::copy_command_to_clipboard(&truncated_matches, selecting_cmd)?;
+                        break;
+                    }
+                    Key::Char(ch) => {
+                        let new_query = format!("{}{}", self.query, ch);
+                        truncated_matches = Finder::get_truncated_matches(&commands, &new_query);
+                        self.update_query(new_query)
+                    }
+                    Key::Backspace => {
+                        let new_query = if self.query.len() > 0 {
+                            self.query.chars().take(self.query.len() - 1).collect()
+                        } else {
+                            String::from("")
+                        };
+                        truncated_matches = Finder::get_truncated_matches(&commands, &new_query);
+                        self.update_query(new_query)
+                    }
+                    Key::Up => {
+                        selecting_cmd = selecting_cmd.checked_sub(1).unwrap_or(0);
+                    }
+                    Key::Down => {
+                        selecting_cmd =
+                            std::cmp::min(selecting_cmd + 1, Finder::NUM_SUGGESTIONS - 1)
+                    }
+                    _ => {}
                 }
-                Key::Char(ch) => {
-                    let new_query = format!("{}{}", self.query, ch);
-                    truncated_matches = Finder::get_truncated_matches(&commands, &new_query);
-                    self.update_query(new_query)
-                }
-                Key::Backspace => {
-                    let new_query = if self.query.len() > 0 {
-                        self.query.chars().take(self.query.len() - 1).collect()
-                    } else {
-                        String::from("")
-                    };
-                    truncated_matches = Finder::get_truncated_matches(&commands, &new_query);
-                    self.update_query(new_query)
-                }
-                Key::Up => {
-                    selecting_cmd = selecting_cmd.checked_sub(1).unwrap_or(0);
-                }
-                Key::Down => {
-                    selecting_cmd = std::cmp::min(selecting_cmd + 1, Finder::NUM_SUGGESTIONS - 1)
-                }
-                _ => {}
+
+                write!(
+                    stdout,
+                    "{}{}{}",
+                    cursor::Restore,
+                    cursor::Save,
+                    termion::clear::AfterCursor
+                )?;
+                write!(stdout, "{}\r\n", self.query)?;
+
+                Finder::output_matched_commands(&truncated_matches, selecting_cmd, &mut stdout)?;
             }
-
-            write!(
-                stdout,
-                "{}{}{}",
-                cursor::Restore,
-                cursor::Save,
-                termion::clear::AfterCursor
-            )?;
-            write!(stdout, "{}\r\n", self.query)?;
-
-            Finder::output_matched_commands(&truncated_matches, selecting_cmd, &mut stdout)?;
         }
 
         Ok(())
