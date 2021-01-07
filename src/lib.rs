@@ -1,10 +1,15 @@
-use std::{fs::OpenOptions, io::{prelude::*, BufReader}, path::Path};
 use std::path::PathBuf;
 use std::{error::Error, fs::File};
 use std::{fmt, io::Stdout};
+use std::{
+    fs::OpenOptions,
+    io::{prelude::*, BufReader},
+    path::Path,
+};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
 use crossbeam::thread;
+use fmt::write;
 use std::io::Write;
 use termion::cursor;
 use termion::input::TermRead;
@@ -249,12 +254,18 @@ impl Finder {
             let key = stdin.next();
             if let Some(Ok(c)) = key {
                 match c {
+                    // TODO: Handle Key::Up Key::Down https://gitlab.redox-os.org/redox-os/termion/-/issues/168
+                    Key::Ctrl('p') | Key::Up => {
+                        selecting_cmd = selecting_cmd.checked_sub(1).unwrap_or(0);
+                    }
+                    Key::Ctrl('n') | Key::Down => {
+                        selecting_cmd =
+                            std::cmp::min(selecting_cmd + 1, Finder::NUM_SUGGESTIONS - 1);
+                    }
                     Key::Ctrl('c') => {
-                        println!("ctrl c");
                         break;
                     }
                     Key::Char('\n') => {
-                        println!("enter");
                         Finder::copy_command_to_clipboard(&truncated_matches, selecting_cmd)?;
                         Finder::output_command_to_file(&truncated_matches, selecting_cmd)?;
                         break;
@@ -272,13 +283,6 @@ impl Finder {
                         };
                         truncated_matches = Finder::get_truncated_matches(&commands, &new_query);
                         self.update_query(new_query)
-                    }
-                    Key::Up => {
-                        selecting_cmd = selecting_cmd.checked_sub(1).unwrap_or(0);
-                    }
-                    Key::Down => {
-                        selecting_cmd =
-                            std::cmp::min(selecting_cmd + 1, Finder::NUM_SUGGESTIONS - 1)
                     }
                     _ => {}
                 }
@@ -313,10 +317,7 @@ impl Finder {
         }
     }
 
-    fn get_selecting_command(
-        commands: &Vec<&Command>,
-        selecting_cmd: usize,
-    ) -> String {
+    fn get_selecting_command(commands: &Vec<&Command>, selecting_cmd: usize) -> String {
         commands
             .get(selecting_cmd)
             .map(|cmd| cmd.command.clone())
@@ -338,7 +339,10 @@ impl Finder {
         selecting_cmd: usize,
     ) -> Result<(), Box<dyn Error>> {
         let cmd = Finder::get_selecting_command(commands, selecting_cmd);
-        let mut file = OpenOptions::new().write(true).create(true).open("/tmp/rf.cmd")?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open("/tmp/rf.cmd")?;
         file.set_len(0)?;
         file.write_all(cmd.as_bytes())?;
         Ok(())
