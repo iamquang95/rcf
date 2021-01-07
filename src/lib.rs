@@ -1,4 +1,4 @@
-use std::io::{prelude::*, BufReader};
+use std::{fs::OpenOptions, io::{prelude::*, BufReader}, path::Path};
 use std::path::PathBuf;
 use std::{error::Error, fs::File};
 use std::{fmt, io::Stdout};
@@ -256,6 +256,7 @@ impl Finder {
                     Key::Char('\n') => {
                         println!("enter");
                         Finder::copy_command_to_clipboard(&truncated_matches, selecting_cmd)?;
+                        Finder::output_command_to_file(&truncated_matches, selecting_cmd)?;
                         break;
                     }
                     Key::Char(ch) => {
@@ -312,16 +313,34 @@ impl Finder {
         }
     }
 
+    fn get_selecting_command(
+        commands: &Vec<&Command>,
+        selecting_cmd: usize,
+    ) -> String {
+        commands
+            .get(selecting_cmd)
+            .map(|cmd| cmd.command.clone())
+            .unwrap_or(String::from(""))
+    }
+
     fn copy_command_to_clipboard(
         commands: &Vec<&Command>,
         selecting_cmd: usize,
     ) -> Result<(), Box<dyn Error>> {
         let mut clipboard_ctx: ClipboardContext = ClipboardProvider::new()?;
-        let cmd = commands
-            .get(selecting_cmd)
-            .map(|cmd| cmd.command.clone())
-            .unwrap_or(String::from(""));
+        let cmd = Finder::get_selecting_command(commands, selecting_cmd);
         clipboard_ctx.set_contents(cmd)?;
+        Ok(())
+    }
+
+    fn output_command_to_file(
+        commands: &Vec<&Command>,
+        selecting_cmd: usize,
+    ) -> Result<(), Box<dyn Error>> {
+        let cmd = Finder::get_selecting_command(commands, selecting_cmd);
+        let mut file = OpenOptions::new().write(true).create(true).open("/tmp/rf.cmd")?;
+        file.set_len(0)?;
+        file.write_all(cmd.as_bytes())?;
         Ok(())
     }
 
