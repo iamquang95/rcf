@@ -3,13 +3,10 @@ use std::{error::Error, fs::File};
 use std::{fmt, io::Stdout};
 use std::{
     fs::OpenOptions,
-    io::{prelude::*, BufReader},
-    path::Path,
+    io::{prelude::*, BufReader}
 };
 
-use clipboard::{ClipboardContext, ClipboardProvider};
 use crossbeam::thread;
-use fmt::write;
 use std::io::Write;
 use termion::cursor;
 use termion::input::TermRead;
@@ -266,7 +263,6 @@ impl Finder {
                         break;
                     }
                     Key::Char('\n') => {
-                        Finder::copy_command_to_clipboard(&truncated_matches, selecting_cmd)?;
                         Finder::output_command_to_file(&truncated_matches, selecting_cmd)?;
                         break;
                     }
@@ -322,16 +318,6 @@ impl Finder {
             .get(selecting_cmd)
             .map(|cmd| cmd.command.clone())
             .unwrap_or(String::from(""))
-    }
-
-    fn copy_command_to_clipboard(
-        commands: &Vec<&Command>,
-        selecting_cmd: usize,
-    ) -> Result<(), Box<dyn Error>> {
-        let mut clipboard_ctx: ClipboardContext = ClipboardProvider::new()?;
-        let cmd = Finder::get_selecting_command(commands, selecting_cmd);
-        clipboard_ctx.set_contents(cmd)?;
-        Ok(())
     }
 
     fn output_command_to_file(

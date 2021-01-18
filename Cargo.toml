@@ -1,14 +1,19 @@
 [package]
-name = "rf"
+name = "rcf"
 version = "0.1.0"
 authors = ["Quang Le <iamquang95@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "A tool to search command history"
+homepage = "https://github.com/iamquang95/rf"
+repository = "https://github.com/iamquang95/rf"
+keywords = ["cli", "search", "history"]
+categories = ["command-line-utilities"]
+readme = "README.md"
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-termion = "*"
-clipboard = "0.5.0"
-fuzzy-matcher = "*"
-crossbeam = "*"
-itertools = "*"
+termion = "1.5.5"
+fuzzy-matcher = "0.3.7"
+crossbeam = "0.8.0"
+itertools = "0.10.0"

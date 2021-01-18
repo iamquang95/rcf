@@ -1,16 +1,10 @@
 use std::error::Error;
 
-use rf::Finder;
+use rcf::Finder;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut finder = Finder::new_with_bash_history()?;
-    // println!("{:?}", finder);
-    // finder.update_query(String::from(""));
-    // let matches = finder.get_matched_commands();
-    // for c in matches {
-    //     println!("{:?}\r\n", c);
-    // }
-
+    
     finder.render()?;
     Ok(())
 }
