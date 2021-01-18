@@ -328,7 +328,7 @@ impl Finder {
         let mut file = OpenOptions::new()
             .write(true)
             .create(true)
-            .open("/tmp/rf.cmd")?;
+            .open("/tmp/rcf.cmd")?;
         file.set_len(0)?;
         file.write_all(cmd.as_bytes())?;
         Ok(())

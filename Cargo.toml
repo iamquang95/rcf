@@ -1,11 +1,11 @@
 [package]
 name = "rcf"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Quang Le <iamquang95@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "A tool to search command history"
-homepage = "https://github.com/iamquang95/rf"
-repository = "https://github.com/iamquang95/rf"
+homepage = "https://github.com/iamquang95/rcf"
+repository = "https://github.com/iamquang95/rcf"
 keywords = ["cli", "search", "history"]
 categories = ["command-line-utilities"]
 readme = "README.md"
