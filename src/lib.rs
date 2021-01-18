@@ -196,6 +196,12 @@ impl Finder {
             result
         }
 
+        if query.is_empty() {
+            let mut result: Vec<&Command> = commands.into_iter().collect();
+            result.reverse();
+            return result
+        }
+
         const NTHREAD: usize = 8;
         let job_chunks = commands.chunks(commands.len() / NTHREAD);
         let mut result = thread::scope(|s| {
@@ -245,6 +251,7 @@ impl Finder {
         let mut selecting_cmd = 0usize;
 
         let mut truncated_matches = Finder::get_truncated_matches(&commands, &self.query);
+        Finder::output_matched_commands(&truncated_matches, selecting_cmd, &mut stdout)?;
 
         let mut stdin = termion::async_stdin().keys();
         loop {
