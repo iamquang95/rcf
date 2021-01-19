@@ -1,5 +1,4 @@
-rcf-append() {                                                                                                                                                 ✘ 130 
-  rcf
+rcf-append() {
   LBUFFER="${LBUFFER}$(cat /tmp/rcf.cmd)"
   local ret=$(cat /tmp/rcf.cmd)
   zle reset-prompt
