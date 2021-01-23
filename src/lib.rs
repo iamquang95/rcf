@@ -3,7 +3,7 @@ use std::{error::Error, fs::File};
 use std::{fmt, io::Stdout};
 use std::{
     fs::OpenOptions,
-    io::{prelude::*, BufReader}
+    io::{prelude::*, BufReader},
 };
 
 use crossbeam::thread;
@@ -199,7 +199,7 @@ impl Finder {
         if query.is_empty() {
             let mut result: Vec<&Command> = commands.into_iter().collect();
             result.reverse();
-            return result
+            return result;
         }
 
         const NTHREAD: usize = 8;
@@ -269,8 +269,12 @@ impl Finder {
                     Key::Ctrl('c') => {
                         break;
                     }
+                    Key::Ctrl('e') => {
+                        Finder::output_command_to_file(&truncated_matches, selecting_cmd, true)?;
+                        break;
+                    }
                     Key::Char('\n') => {
-                        Finder::output_command_to_file(&truncated_matches, selecting_cmd)?;
+                        Finder::output_command_to_file(&truncated_matches, selecting_cmd, false)?;
                         break;
                     }
                     Key::Char(ch) => {
@@ -330,14 +334,20 @@ impl Finder {
     fn output_command_to_file(
         commands: &Vec<&Command>,
         selecting_cmd: usize,
+        execute: bool,
     ) -> Result<(), Box<dyn Error>> {
         let cmd = Finder::get_selecting_command(commands, selecting_cmd);
+        let cmd_with_mode = if execute {
+            format!("{} {}", "run", cmd)
+        } else {
+            format!("{} {}", "copy", cmd)
+        };
         let mut file = OpenOptions::new()
             .write(true)
             .create(true)
             .open("/tmp/rcf.cmd")?;
         file.set_len(0)?;
-        file.write_all(cmd.as_bytes())?;
+        file.write_all(cmd_with_mode.as_bytes())?;
         Ok(())
     }
 
